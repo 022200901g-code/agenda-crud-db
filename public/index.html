@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda Electrónica - CRUD Dinámico</title>
+  <style>
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1d4ed8;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #1e293b;
+      --border: #cbd5e1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 20px; }
+    .container { max-width: 1100px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+    h1 { text-align: center; color: var(--primary-dark); }
+    .card { background: var(--card); padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+    form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-weight: 600; font-size: 0.85rem; color: #475569; }
+    input, select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.95rem; }
+    .btn-container { grid-column: 1 / -1; display: flex; gap: 10px; justify-content: flex-end; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s; }
+    .btn-save { background: var(--primary); color: white; }
+    .btn-save:hover { background: var(--primary-dark); }
+    .btn-cancel { background: #64748b; color: white; display: none; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9rem; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border); }
+    th { background: #f1f5f9; color: #334155; }
+    tr:hover { background: #f8fafc; }
+    .actions { display: flex; gap: 6px; }
+    .btn-edit { background: #f59e0b; color: white; padding: 4px 8px; font-size: 0.8rem; }
+    .btn-delete { background: #ef4444; color: white; padding: 4px 8px; font-size: 0.8rem; }
+    .a-link { color: var(--primary); text-decoration: none; }
+    .a-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>📖 Agenda Dinámica (CRUD + Base de Datos)</h1>
+
+  <!-- Formulario de Registro / Edición -->
+  <div class="card">
+    <h2 id="formTitle">Agregar Nuevo Contacto</h2>
+    <form id="contactoForm">
+      <input type="hidden" id="contactoId">
+
+      <div class="form-group">
+        <label>Nombres Completos *</label>
+        <input type="text" id="nombres" required placeholder="Ej: Maria Lopez">
+      </div>
+
+      <div class="form-group">
+        <label>Género</label>
+        <select id="genero">
+          <option value="Masculino">Masculino</option>
+          <option value="Femenino">Femenino</option>
+          <option value="Otro">Otro</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>Fecha de Nacimiento</label>
+        <input type="date" id="fecha_nacimiento">
+      </div>
+
+      <div class="form-group">
+        <label>Teléfono</label>
+        <input type="text" id="telefono" placeholder="+51 987654321">
+      </div>
+
+      <div class="form-group">
+        <label>Correo Electrónico</label>
+        <input type="email" id="email" placeholder="maria@ejemplo.com">
+      </div>
+
+      <div class="form-group">
+        <label>Perfil LinkedIn (URL)</label>
+        <input type="url" id="linkedin" placeholder="https://linkedin.com/in/usuario">
+      </div>
+
+      <div class="form-group">
+        <label>Tipo de Sangre</label>
+        <select id="tipo_sangre">
+          <option value="O+">O+</option>
+          <option value="O-">O-</option>
+          <option value="A+">A+</option>
+          <option value="A-">A-</option>
+          <option value="B+">B+</option>
+          <option value="B-">B-</option>
+          <option value="AB+">AB+</option>
+          <option value="AB-">AB-</option>
+        </select>
+      </div>
+
+      <div class="btn-container">
+        <button type="button" id="btnCancel" class="btn-cancel" onclick="resetForm()">Cancelar</button>
+        <button type="submit" class="btn-save" id="btnSubmit">Guardar Contacto</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Tabla de Resultados -->
+  <div class="card" style="overflow-x: auto;">
+    <h2>Lista de Contactos Registrados</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nombres</th>
+          <th>Género</th>
+          <th>F. Nacimiento</th>
+          <th>Teléfono</th>
+          <th>Email</th>
+          <th>LinkedIn</th>
+          <th>Sangre</th>
+          <th>Acciones</th>
+        </tr>
+      </thead>
+      <tbody id="tablaContactos">
+        <!-- Se llena dinámicamente con JavaScript -->
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const API_URL = '/api/contactos';
+  const form = document.getElementById('contactoForm');
+  const tabla = document.getElementById('tablaContactos');
+  let editando = false;
+
+  // Cargar contactos al iniciar la página
+  document.addEventListener('DOMContentLoaded', cargarContactos);
+
+  // Leer registros de la base de datos
+  async function cargarContactos() {
+    try {
+      const res = await fetch(API_URL);
+      const contactos = await res.json();
+      tabla.innerHTML = '';
+
+      if (contactos.length === 0) {
+        tabla.innerHTML = `<tr><td colspan="9" style="text-align:center; color:#94a3b8;">No hay contactos guardados en la base de datos.</td></tr>`;
+        return;
+      }
+
+      contactos.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${c.id}</td>
+          <td><strong>${escapeHtml(c.nombres)}</strong></td>
+          <td>${c.genero || '-'}</td>
+          <td>${c.fecha_nacimiento || '-'}</td>
+          <td>${c.telefono || '-'}</td>
+          <td>${c.email ? `<a class="a-link" href="mailto:${c.email}">${c.email}</a>` : '-'}</td>
+          <td>${c.linkedin ? `<a class="a-link" href="${c.linkedin}" target="_blank">Ver perfil</a>` : '-'}</td>
+          <td><span style="background:#e2e8f0; padding:2px 6px; border-radius:4px;">${c.tipo_sangre || '-'}</span></td>
+          <td class="actions">
+            <button class="btn-edit" onclick='prepararEdicion(${JSON.stringify(c)})'>Editar</button>
+            <button class="btn-delete" onclick="eliminarContacto(${c.id})">Eliminar</button>
+          </td>
+        `;
+        tabla.appendChild(tr);
+      });
+    } catch (err) {
+      console.error('Error al cargar contactos:', err);
+    }
+  }
+
+  // Guardar (Crear o Actualizar)
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const id = document.getElementById('contactoId').value;
+    const datos = {
+      nombres: document.getElementById('nombres').value,
+      genero: document.getElementById('genero').value,
+      fecha_nacimiento: document.getElementById('fecha_nacimiento').value,
+      telefono: document.getElementById('telefono').value,
+      email: document.getElementById('email').value,
+      linkedin: document.getElementById('linkedin').value,
+      tipo_sangre: document.getElementById('tipo_sangre').value
+    };
+
+    const method = editando ? 'PUT' : 'POST';
+    const url = editando ? `${API_URL}/${id}` : API_URL;
+
+    try {
+      const res = await fetch(url, {
+        method: method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(datos)
+      });
+
+      if (res.ok) {
+        resetForm();
+        cargarContactos();
+      } else {
+        alert('Ocurrió un error al procesar la solicitud.');
+      }
+    } catch (err) {
+      console.error('Error al guardar:', err);
+    }
+  });
+
+  // Cargar datos en el formulario para editar
+  function prepararEdicion(contacto) {
+    editando = true;
+    document.getElementById('formTitle').innerText = 'Editar Contacto #' + contacto.id;
+    document.getElementById('contactoId').value = contacto.id;
+    document.getElementById('nombres').value = contacto.nombres;
+    document.getElementById('genero').value = contacto.genero;
+    document.getElementById('fecha_nacimiento').value = contacto.fecha_nacimiento;
+    document.getElementById('telefono').value = contacto.telefono;
+    document.getElementById('email').value = contacto.email;
+    document.getElementById('linkedin').value = contacto.linkedin;
+    document.getElementById('tipo_sangre').value = contacto.tipo_sangre;
+
+    document.getElementById('btnSubmit').innerText = 'Actualizar Contacto';
+    document.getElementById('btnCancel').style.display = 'inline-block';
+  }
+
+  // Eliminar registro
+  async function eliminarContacto(id) {
+    if (confirm('¿Estás seguro de eliminar el contacto ID ' + id + '?')) {
+      try {
+        const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
+        if (res.ok) cargarContactos();
+      } catch (err) {
+        console.error('Error al eliminar:', err);
+      }
+    }
+  }
+
+  // Limpiar formulario
+  function resetForm() {
+    editando = false;
+    form.reset();
+    document.getElementById('contactoId').value = '';
+    document.getElementById('formTitle').innerText = 'Agregar Nuevo Contacto';
+    document.getElementById('btnSubmit').innerText = 'Guardar Contacto';
+    document.getElementById('btnCancel').style.display = 'none';
+  }
+
+  function escapeHtml(text) {
+    return text ? text.replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
+  }
+</script>
+
+</body>
+</html>
